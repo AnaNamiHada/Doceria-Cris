@@ -1,0 +1,196 @@
+// ========================================
+// CADASTRO DE PRODUTOS
+// ========================================
+
+const API_URL = 'http://localhost:8080/api/v1';
+
+// ========================================
+// CARREGAR CATEGORIAS
+// ========================================
+
+async function carregarCategorias() {
+    try {
+        const response = await fetch(`${API_URL}/categorias/ativas`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const categorias = await response.json();
+        
+        const select = document.getElementById('categoriaId');
+        select.innerHTML = '<option value="">Selecione uma categoria...</option>';
+        
+        categorias.forEach(categoria => {
+            const option = document.createElement('option');
+            option.value = categoria.id;
+            option.textContent = `${categoria.icone || '📦'} ${categoria.nome}`;
+            select.appendChild(option);
+        });
+        
+        console.log('✅ Categorias carregadas:', categorias.length);
+        
+    } catch (erro) {
+        console.error('❌ Erro ao carregar categorias:', erro);
+        mostrarNotificacao('Erro ao carregar categorias. Verifique se o back-end está rodando.', 'error');
+    }
+}
+
+// ========================================
+// SALVAR PRODUTO
+// ========================================
+
+async function salvarProduto(dados) {
+    try {
+        const response = await fetch(`${API_URL}/produtos`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dados),
+        });
+
+        if (!response.ok) {
+            const erro = await response.json();
+            throw new Error(erro.message || `HTTP ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (erro) {
+        console.error('❌ Erro ao salvar produto:', erro);
+        throw erro;
+    }
+}
+
+// ========================================
+// MANIPULAR SUBMIT
+// ========================================
+
+document.getElementById('productForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    
+    const produto = {
+        nome: formData.get('nome').trim(),
+        descricao: formData.get('descricao').trim(),
+        preco: parseFloat(formData.get('preco')),
+        precoPromocional: formData.get('precoPromocional') ? 
+            parseFloat(formData.get('precoPromocional')) : null,
+        tempoPreparo: parseInt(formData.get('tempoPreparo')),
+        categoriaId: parseInt(formData.get('categoriaId')),
+        ingredientes: formData.get('ingredientes').trim(),
+        destaque: formData.get('destaque') === 'on',
+        disponivel: formData.get('disponivel') === 'on',
+        peso: formData.get('peso').trim(),
+        imagem: formData.get('imagem').trim(),
+    };
+
+    // Validações
+    if (!produto.nome) {
+        mostrarNotificacao('⚠️ O nome do produto é obrigatório!', 'error');
+        document.getElementById('nome').focus();
+        return;
+    }
+
+    if (!produto.preco || produto.preco <= 0) {
+        mostrarNotificacao('⚠️ O preço deve ser maior que zero!', 'error');
+        document.getElementById('preco').focus();
+        return;
+    }
+
+    if (!produto.tempoPreparo || produto.tempoPreparo < 1) {
+        mostrarNotificacao('⚠️ O tempo de preparo deve ser maior que zero!', 'error');
+        document.getElementById('tempoPreparo').focus();
+        return;
+    }
+
+    if (!produto.categoriaId) {
+        mostrarNotificacao('⚠️ Selecione uma categoria!', 'error');
+        document.getElementById('categoriaId').focus();
+        return;
+    }
+
+    if (produto.precoPromocional && produto.precoPromocional >= produto.preco) {
+        mostrarNotificacao('⚠️ O preço promocional deve ser menor que o preço normal!', 'error');
+        document.getElementById('precoPromocional').focus();
+        return;
+    }
+
+    const btnSubmit = document.getElementById('submitBtn');
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<span class="loading-spinner"></span> Salvando...';
+
+    try {
+        const produtoSalvo = await salvarProduto(produto);
+        
+        mostrarNotificacao(
+            `✅ Produto "${produtoSalvo.nome}" cadastrado com sucesso! ID: ${produtoSalvo.id}`,
+            'success'
+        );
+        
+        limparFormulario();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+    } catch (erro) {
+        mostrarNotificacao(
+            `❌ Erro ao cadastrar produto: ${erro.message}`,
+            'error'
+        );
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '💾 Salvar Produto';
+    }
+});
+
+// ========================================
+// FUNÇÕES UTILITÁRIAS
+// ========================================
+
+function limparFormulario() {
+    const form = document.getElementById('productForm');
+    form.reset();
+    
+    const notification = document.getElementById('notification');
+    notification.className = 'notification';
+    notification.style.display = 'none';
+    
+    document.getElementById('nome').focus();
+}
+
+function mostrarNotificacao(mensagem, tipo = 'success') {
+    const notification = document.getElementById('notification');
+    notification.textContent = mensagem;
+    notification.className = `notification show ${tipo}`;
+    notification.style.display = 'block';
+    
+    if (tipo === 'success') {
+        setTimeout(() => {
+            notification.className = 'notification';
+            notification.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// ========================================
+// EXPORTA FUNÇÕES PARA USO GLOBAL
+// ========================================
+
+window.limparFormulario = limparFormulario;
+window.mostrarNotificacao = mostrarNotificacao;
+
+// ========================================
+// INICIALIZAÇÃO
+// ========================================
+
+async function init() {
+    console.log('📝 Página de cadastro iniciada');
+    await carregarCategorias();
+    document.getElementById('nome').focus();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
